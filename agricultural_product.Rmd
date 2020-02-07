@@ -9,6 +9,8 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# 상관 분석을 통한 지역별 돼지고기 가격 연관성 분석
+
 ## 패키지 및 데이터 불러오기
 ```{r}
 library1 <- c("plyr", "ggplot2", "stringr", "zoo", "corrplot", "RColorBrewer")
@@ -190,4 +192,69 @@ ggplot(pig.region.monthly.mean[pig.region.monthly.mean$name %in% c("광주", "�
   geom_line() + theme_classic() + 
   geom_point(size = 6, shape=20, alpha=0.5) +
   ylab("돼지고기 가격") + xlab("")
+```
+
+## 데이터 저장하기
+```{r}
+write.csv(pig.region, "pig.region.csv", fileEncoding = "UTF-8")
+write.csv(pig.region.monthly.mean, "Data/pig.region.monthly.mean.csv", fileEncoding = "UTF-8")
+```
+
+# 공적분 검정을 통한 농축산물 소매가격 연관성 분석
+```{r}
+#install.packages("stringr")
+#install.packages("urca")
+#install.packages("gridExtra")
+
+library2 <- c("plyr", "stringr", "urca", "ggplot2", "zoo", "gridExtra")
+unlist(lapply(library2, require, character.only = TRUE))
+```
+
+## 데이터 불러오기
+```{r}
+# 위에서 불러온 파일로 사용
+```
+
+## 데이터 가공하기
+```{r}
+str(product)
+head(product, 10)
+```
+
+```{r}
+temp <- ddply(product, .(item, date), summarise, mean.price = mean(price))
+head(temp,10)
+```
+
+### 일별 농축산물의 평균 소매가격 추출하기
+```{r}
+category <- subset(code, code$"구분코드설명"=="품목코드")
+category
+```
+
+```{r}
+colnames(category) <- c('code', 'exp', 'item', 'name')
+```
+
+```{r}
+date.item.mean <- merge(temp, category, by = "item")
+head(date.item.mean)
+```
+
+### 월별 데이터를 필요한 변수들만 구성하여 생성
+```{r}
+month.item.mean <- ddply(date.item.mean, .(name, item, month = str_sub(as.character.Date(date), 1, 7)),
+summarise, mean.price=mean(mean.price))
+
+head(month.item.mean, 10)
+```
+
+```{r}
+temp <- dlply(date.item.mean, .(name), summarise, mean.price)
+```
+
+```{r}
+daily.product <- data.frame("쌀"=unlist(temp$"쌀"), "배추"=unlist(temp$"배추"),
+"상추"=unlist(temp$"상추"), "호박"=unlist(temp$"호박"), "양파"=unlist(temp$"양파"), "파프리카"=unlist(temp$"파프리카"), "참깨"=unlist(temp$"참깨"), "사과"=unlist(temp$"사과"), "돼지고기"=unlist(temp$"돼지고기"), "닭고기"=unlist(temp$"닭고기"))
+head(daily.product, 10)
 ```
