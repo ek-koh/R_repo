@@ -2,7 +2,10 @@
 title: "product"
 author: "ekoh"
 date: '2020 2 7 '
-output: html_document
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -81,7 +84,7 @@ head(day.pig)
 
 p1 <- ddply(day.pig, .(date), summarise, name=name, region=region, price=price)
 p2 <- ddply(p1, .(date, name), summarise, mean.price = mean(price))
-p2
+head(p2)
 total.pig.mean <- dlply(p2, .(name))
 # total.pig.mean <- dlply(ddply(ddply(day.pig, .(date), summarise, name=name, region=region, price=price), .(date, name), summarise, mean.price=mean(price)), .(name))
 ```
