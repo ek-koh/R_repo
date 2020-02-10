@@ -197,7 +197,7 @@ ggplot(pig.region.monthly.mean[pig.region.monthly.mean$name %in% c("광주", "�
 ## 데이터 저장하기
 ```{r}
 write.csv(pig.region, "pig.region.csv", fileEncoding = "UTF-8")
-write.csv(pig.region.monthly.mean, "Data/pig.region.monthly.mean.csv", fileEncoding = "UTF-8")
+write.csv(pig.region.monthly.mean, "pig.region.monthly.mean.csv", fileEncoding = "UTF-8")
 ```
 
 # 공적분 검정을 통한 농축산물 소매가격 연관성 분석
@@ -252,9 +252,175 @@ head(month.item.mean, 10)
 ```{r}
 temp <- dlply(date.item.mean, .(name), summarise, mean.price)
 ```
-
+### 일간 품목별 평균 데이터
 ```{r}
 daily.product <- data.frame("쌀"=unlist(temp$"쌀"), "배추"=unlist(temp$"배추"),
 "상추"=unlist(temp$"상추"), "호박"=unlist(temp$"호박"), "양파"=unlist(temp$"양파"), "파프리카"=unlist(temp$"파프리카"), "참깨"=unlist(temp$"참깨"), "사과"=unlist(temp$"사과"), "돼지고기"=unlist(temp$"돼지고기"), "닭고기"=unlist(temp$"닭고기"))
 head(daily.product, 10)
 ```
+### 월간 품목별 평균 데이터
+```{r}
+temp <- dlply(month.item.mean, .(name), summarise, mean.price)
+monthly.product <- data.frame("쌀"=unlist(temp$"쌀"), "배추"=unlist(temp$"배추"), "상추"=unlist(temp$"상추"), "호박"=unlist(temp$"호박"), "양파"=unlist(temp$"양파"), "파프리카"=unlist(temp$"파프리카"), "참깨"=unlist(temp$"참깨"), "사과"=unlist(temp$"사과"), "돼지고기"=unlist(temp$"돼지고기"), "닭고기"=unlist(temp$"닭고기"))
+head(monthly.product)
+```
+## 공적분 검정
+```{r}
+for (i in 1:9) {
+  for (j in 1:9) {
+    if ((i+j) < 11) {
+      jc <- ca.jo(data.frame(daily.product[,i], daily.product[,i+j]), type = "trace", K=2, ecdet="const")
+    if (jc@teststat[1] > jc@cval[1]) {
+      if(jc@V[1,1]*jc@V[2,1]>0){
+        cat(colnames(monthly.product)[i],"와",colnames(monthly.product)[i+j],": 음의 공적분 관계가 있다.", "\n")
+      } else {
+        cat(colnames(monthly.product)[i],"와",colnames(monthly.product)[i+j],": 양의 공적분 관계가 있다.", "\n")
+      }
+    }}
+  }
+}
+```
+
+### 상추와 호박의 공적분 분석 결과 살펴보기
+```{r}
+output <- ca.jo(data.frame(daily.product[,3], daily.product[,4]), type="trace", K=2, ecdet="const")
+summary(output)
+```
+
+#### 필요한 분석결과 추출
+```{r}
+output@teststat[1]
+output@cval[1]
+output@V[1,1]
+output@V[2,1]
+```
+- r <= 1이라는 귀무가설 하에서 10% 유의수준으로 teststat(8.14)>cval(10pct)(7.52)이면 공적분관계가 있다고 본다.
+- [1,1]의 값 1.00000과 [2,1]의 값 -1.05189의 곱이 음수이므로 양의 공적분 관계가 있다고 본다.
+
+## 데이터 시각화
+```{r}
+month.item.mean$month <- as.Date(as.yearmon(month.item.mean$month, "%Y-%m"))
+```
+
+```{r}
+p1 <- ggplot(month.item.mean[month.item.mean$name %in% c("돼지고기", "상추"),], aes(x=month, y=mean.price, colour=name, group=name)) +
+  geom_line() + scale_y_continuous(name="가격", limits=c(0,2500)) +
+  theme_bw() + xlab("")
+
+p2 <- ggplot(month.item.mean[month.item.mean$name %in% c("상추","호박"),], aes(x=month, y=mean.price, colour=name, group=name)) +
+  geom_line() + scale_y_continuous(name="가격", limits=c(0,3000)) +
+  theme_bw() + xlab("")
+
+month.item.mean[month.item.mean$name %in% c("상추"),]$mean.price <- month.item.mean[month.item.mean$name %in% c("상추"),]$mean.price+5000
+
+p4 <- ggplot(month.item.mean[month.item.mean$name %in% c("닭고기", "상추"),], aes(x=month, y=mean.price, colour=name, group=name)) +
+  geom_line() + scale_y_continuous(name="가격", limits=c(5000,8000)) +
+  theme_bw() + xlab("")
+
+month.item.mean[month.item.mean$name %in% c("호박"),]$mean.price <- month.item.mean[month.item.mean$name %in% c("호박"),]$mean.price+5000
+
+p5 <- ggplot(month.item.mean[month.item.mean$name %in% c("닭고기", "호박"),], aes(x=month, y=mean.price, colour=name, group=name)) +
+  geom_line() + scale_y_continuous(name="가격", limits=c(5000,8000)) +
+  theme_bw() + xlab("")
+```
+
+```{r}
+p1 + theme(legend.position = "top") + scale_color_manual(values = c("red", "orange")) +
+  geom_line(size=1.0)
+```
+
+```{r}
+p2 + theme(legend.position = "top") + scale_color_manual(values = c("red", "orange")) + geom_line(size=1.0)
+```
+
+```{r}
+p4 + theme(legend.position = "top") + scale_colour_manual(values = c("blue", "skyblue")) +
+  geom_line(size=1.0)
+```
+
+```{r}
+p5 + theme(legend.position = "top") + scale_color_manual(values = c("blue", "skyblue")) +
+  geom_line(size=1.0)
+```
+
+## 데이터 저장하기
+```{r}
+write.csv(date.item.mean, "data.item.mean.csv", fileEncoding = "UTF-8")
+write.csv(month.item.mean, "month.item.mean.csv", fileEncoding = "UTF-8")
+```
+
+# 클러스터링 기법을 이용한 농축산물 데이터 분석
+
+## 필요 패키지 및 데이터 불러오기
+```{r}
+library3 <- c("plyr", "TSclust", "zoo", "ggplot2")
+unlist(lapply(library3, require, character.only=TRUE))
+# install.packages("TSclust")
+
+pig.region <- read.csv("pig.region.csv", header = T, fileEncoding = "UTF-8")[,-1]
+head(pig.region, 10)
+
+pig.region.monthly.mean <- read.csv("pig.region.monthly.mean.csv", header = T, fileEncoding = "UTF-8")[,-1]
+head(pig.region.monthly.mean, 20)
+```
+
+```{r}
+date.item.mean <- read.csv("data.item.mean.csv", header = T, fileEncoding = "UTF-8")[-1]
+head(date.item.mean, 10)
+
+month.item.mean <- read.csv("month.item.mean.csv", header = T, fileEncoding = "UTF-8")[,-1]
+head(month.item.mean, 10)
+```
+
+## 데이터 가공하기
+
+```{r}
+temp <- dlply(date.item.mean, .(name), summarise, mean.price)
+farm.product <- data.frame("쌀"=unlist(temp$"쌀"), "배추"=unlist(temp$"배추"), "상추"=unlist(temp$"상추"), "호박"=unlist(temp$"호박"), "양파"=unlist(temp$"양파"), "파프리카"=unlist(temp$"파프리카"), "참깨"=unlist(temp$"참깨"), "사과"=unlist(temp$"사과"))
+head(farm.product)
+```
+
+## 클러스터링 분석 및 데이터 시각화
+### 농산물 자료
+#### 군집분석
+```{r}
+plot(hclust(diss(farm.product, "COR")), axes = F, ann = F)
+```
+
+#### 시계열도 그리기 전 month 데이터 가공
+```{r}
+month.item.mean$month <- as.Date(as.yearmon(month.item.mean$month, "%Y-%m"))
+```
+
+#### 가장 유의한 군집으로 형성된 상추와 호박에 대한 시계열 그림
+```{r}
+ggplot(month.item.mean[month.item.mean$name %in% c("상추", "호박"),], aes(x=month, y=mean.price, colour=name, group=name)) + geom_line() + theme_bw() + geom_point(size=6, shape=20, alpha=0.5) + ylab("가격") + xlab("")
+```
+
+### 돼지고기 자료
+#### 군집분석
+```{r}
+plot(hclust(diss(pig.region, "COR")), axes = F, ann = F)
+```
+
+#### 월별 데이터 가공
+```{r}
+pig.region.monthly.mean$month <- as.Date(as.yearmon(pig.region.monthly.mean$month, "%Y-%m"))
+```
+
+#### 대구-광주, 부산-울산 시계열 그림
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
