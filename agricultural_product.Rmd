@@ -409,6 +409,191 @@ pig.region.monthly.mean$month <- as.Date(as.yearmon(pig.region.monthly.mean$mont
 ```
 
 #### 대구-광주, 부산-울산 시계열 그림
+```{r}
+ggplot(pig.region.monthly.mean[pig.region.monthly.mean$region %in% c(2200, 2401),], aes(x=month, y=mean.price, colour=name, group=name)) +
+  geom_line() + geom_point(size=6, shape=20, alpha=0.5) + theme_bw() +
+  ylab("돼지고기 가격") + xlab("")
+```
+```{r}
+ggplot(pig.region.monthly.mean[pig.region.monthly.mean$region %in% c(2100, 2601),], aes(x=month, y=mean.price, colour=name, group=name)) +
+  geom_line() +
+  geom_point(size=6, shape=20, alpha=0.5) +
+  theme_bw() +
+  xlab("") +
+  ylab("돼지고기 가격")
+```
+
+#### 다른 그룹인 대구-부산 시계열 그림
+```{r}
+ggplot(pig.region.monthly.mean[pig.region.monthly.mean$name %in% c("대구", "부산"),], aes(x=month, y=mean.price, colour=name, group=name)) +
+  geom_line() +
+  geom_point(size=4, shape=20, alpha=0.5) +
+  theme_dark() +
+  ylab("돼지고기 가격") +
+  xlab("")
+```
+
+구제역 발생 후 대구는 큰 영향을 받았으나 부산은 그렇지 않았기 때문으로 추정됨.
+
+# 날씨 자료와 농산물 자료의 인과관계 분석
+
+## 필요 패키지 및 데이터 불러오기
+```{r}
+library4 <- c("plyr", "stringr", "dygraphs", "zoo", "xts")
+# install.packages("dygraphs")
+# install.packages("xts")
+unlist(lapply(library4, require, character.only=TRUE))
+
+product <- read.csv("product.csv", header = T, fileEncoding = "UTF-8")
+weather <- read.csv("weather.csv", header = T, fileEncoding = "EUC-KR")
+code <- read.csv("code.csv", header = T, fileEncoding = "EUC-KR")
+```
+
+## 데이터 가공하기
+### 농축산물 데이터 가공
+#### 지역코드 추출
+```{r}
+subset(code, code$"구분코드설명"=="지역코드")
+```
+
+#### 품목별 코드번호: category 오브젝트 생성
+```{r}
+category <- subset(code, code$"구분코드설명" == "품목코드")
+category
+```
+
+#### 변수명 한글 -> 영어
+```{r}
+colnames(product) <- c('date', 'category', 'item', 'region', 'mart', 'price')
+
+colnames(category) <- c('code', 'exp', 'item', 'name')
+
+head(product)
+head(category)
+```
+
+#### 서울지역의 가격만 추출하여 품몸(item), 일자(date)별로 평균 가격을 구하여 품목에 대한 데이터 category데이터와 merge하여 seoul.item 데이터 생성
+
+```{r}
+mean.price.new <- ddply(product[which(product$region==1101),],.(item, date), summarise, mean.price=mean(price))
+
+seoul.item <- merge(mean.price.new, category, by="item", all = T)
+
+head(seoul.item, 10)
+```
+
+#### 일별 평균가격을 생성하여 품목별로 정렬한 seoul.item.mean 데이터 생성
+```{r}
+seoul.item.mean <- ddply(seoul.item, .(item, date), summarise, item.name=name, mean.price=mean.price)
+head(seoul.item.mean, 10)
+```
+
+### 기상데이터 가공
+```{r}
+str(weather)
+```
+```{r}
+head(weather)
+```
+
+#### 변수명 한글 -> 영어
+```{r}
+colnames(weather) <- c('region', 'category', 'value', 'date')
+```
+
+#### weather 데이터를 지역별 이름순으로 나누어 region.weather 리스트 형식의 데이터 생성
+```{r}
+region.weather <- dlply(weather, .(region))
+names(region.weather)
+```
+#### 서울에 대한 기상데이터 확인
+```{r}
+head(region.weather[[41]], 10)
+tail(region.weather[[41]], 10)
+```
+
+#### 서울 강수량 데이터
+```{r}
+init.seoul.rain <- region.weather[[41]][which(region.weather[[41]][,2]=="강수량"),]
+
+head(init.seoul.rain, 10)
+tail(init.seoul.rain, 10)
+init.seoul.rain[which(init.seoul.rain$date=='2010-01-02'),]
+```
+
+#### 날짜순 배열
+```{r}
+sort.seoul.rain <- dlply(init.seoul.rain, .(date))
+head(sort.seoul.rain)
+```
+
+#### 일별로 데이터값들이 2개씩 중복되어 있으므로 하나의 값만 추출하여 resort.seoul.rain데이터 생성
+```{r}
+resort.seoul.rain <- lapply(1:length(sort.seoul.rain), function(x) sort.seoul.rain[[x]][1,])
+
+head(resort.seoul.rain, 10)
+```
+
+#### resort.seoul.rain 데이터에서 date와 value 값만 추출하여 seoul.rain데이터 생성
+```{r}
+seoul.rain <- data.frame(date=unlist(lapply(1:length(resort.seoul.rain), function(x) resort.seoul.rain[[x]][,4])),rain=unlist(lapply(1:length(resort.seoul.rain),function(x) resort.seoul.rain[[x]][,3])))
+
+head(seoul.rain, 10)
+```
+
+## NA -> 0
+```{r}
+seoul.rain[,2][is.na(seoul.rain[,2])] <- 0
+head(seoul.rain, 10)
+```
+
+### 농산물 데이터와 기상 데이터의 가공
+```{r}
+str(seoul.item.mean)
+str(seoul.rain)
+
+head(seoul.item.mean)
+tail(seoul.item.mean)
+
+head(seoul.rain)
+tail(seoul.rain)
+```
+
+#### 농산물(2011~2013), 기상(2010~2014) 이므로 date에 따라 두 데이터를 합쳐서 seoul.item.rain생성
+```{r}
+seoul.item.rain <- merge(seoul.rain, seoul.item.mean, by="date", all.y = T)
+
+head(seoul.item.rain, 20)
+str(seoul.item.rain)
+```
+```{r}
+seoul.item.rain <- merge(seoul.rain, seoul.item.mean, by="date", all = T)
+
+head(seoul.item.rain)
+
+seoul.item.rain <- ddply(seoul.item.rain[!seoul.item.rain$mean.price %in% NA,], .(item.name))
+
+head(seoul.item.rain)
+str(seoul.item.rain)
+```
+
+## 데이터 시각화
+### plot()함수를 이용한 Graph Overlap
+```{r}
+par(mar=c(3,5,3,5))
+plot(as.Date(seoul.item.rain[seoul.item.rain$item.name %in% c("호박"),]$date), seoul.item.rain[seoul.item.rain$item.name %in% c("호박"),]$mean.price, type="l", col="blue", xlab="", ylab="", ylim=c(0,4000))
+mtext("가격", side=2, line=3)
+
+par(new=T)
+plot(as.Date(seoul.item.rain[seoul.item.rain$item.name %in% c("상추"),]$date), seoul.item.rain[seoul.item.rain$item.name %in% c("상추"),]$mean.price, type="l", col="green", xlab="", ylab="", ylim=c(0,4000), axes=F)
+
+par(new=T)
+plot(as.Date(seoul.item.rain$date), seoul.item.rain$rain, type="l", col="red", xlab="", ylab="", ylim=c(0,400), axes=F)
+
+axis(4, ylim=c(0,400), col.axis="red", las=3)
+mtext("강수량", side=4, line=3)
+```
+
 
 
 
